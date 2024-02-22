@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Update package lists
+sudo apt-get update
+
+# Install Apache
+sudo apt-get install -y apache2
+
+# Install MySQL
+sudo apt-get install -y mysql-server
+# During installation, set a password for the MySQL root user
+
+# Install PHP 7.1 and required extensions
+sudo apt-get install -y software-properties-common
+sudo add-apt-repository -y ppa:ondrej/php
+sudo apt-get update
+sudo apt-get install -y php7.1 php7.1-cli php7.1-json php7.1-common php7.1-mysql php7.1-zip php7.1-gd php7.1-mbstring php7.1-curl php7.1-xml php7.1-bcmath
+
+# Install Composer
+sudo php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+sudo php -r "unlink('composer-setup.php');"
+
+# Install Laravel
+composer create-project --prefer-dist laravel/laravel my-laravel-app "5.4.*"
+
+# Configure Apache for Laravel
+sudo cp /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/default_backup.conf
+sudo cat <<EOL > /etc/apache2/sites-available/000-default.conf
+<VirtualHost *:80>
+    ServerAdmin webmaster@localhost
+    DocumentRoot /var/www/html/my-laravel-app/public
+
+    <Directory /var/www/html/my-laravel-app>
+        AllowOverride All
+    </Directory>
+
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+EOL
+
+# Enable the new site and disable the default site
+sudo a2ensite 000-default.conf
+sudo a2dissite default
+
+# Restart Apache
+sudo service apache2 restart
+
+# Set Permissions
+sudo chown -R www-data:www-data /var/www/html/my-laravel-app
+sudo chmod -R 755 /var/www/html/my-laravel-app/storage
+
+# Configure MySQL for Laravel
+sudo mysql -u root -p -e "CREATE DATABASE laravel_db;"
+sudo mysql -u root -p -e "CREATE USER 'laravel_user'@'localhost' IDENTIFIED BY 'your_password';"
+sudo mysql -u root -p -e "GRANT ALL PRIVILEGES ON laravel_db.* TO 'laravel_user'@'localhost';"
+sudo mysql -u root -p -e "FLUSH PRIVILEGES;"
+
+# Update Laravel application's .env file with the database details
+sudo cp /var/www/html/my-laravel-app/.env.example /var/www/html/my-laravel-app/.env
+sudo sed -i 's/DB_DATABASE=homestead/DB_DATABASE=laravel_db/' /var/www/html/my-laravel-app/.env
+sudo sed -i 's/DB_USERNAME=homestead/DB_USERNAME=laravel_user/' /var/www/html/my-laravel-app/.env
+sudo sed -i 's/DB_PASSWORD=secret/DB_PASSWORD=your_password/' /var/www/html/my-laravel-app/.env
+
+# Run Laravel Migration
+cd /var/www/html/my-laravel-app
+php artisan migrate
+
+# Display success message
+echo "Laravel 5.4 with PHP 7.1, MySQL, and Apache has been successfully installed and configured!"
